@@ -1,11 +1,13 @@
 /*
- * @Author: zhang zhipeng 
- * @Date: 2020-02-01 17:25:00 
+ * @Author: zhang zhipeng
+ * @Date: 2020-02-01 17:25:00
  * @Last Modified by: zhang zhipeng
- * @Last Modified time: 2020-04-16 15:12:39
+ * @Last Modified time: 2020-09-03 10:22:26
  */
 
-import { flattenHeaders } from '../utils'
+import {
+	flattenHeaders
+} from '../utils'
 
 export default function dispatchRequest(config) {
 	procressConfig(config)
@@ -25,8 +27,8 @@ function transformURL(baseURL = '', url) {
 }
 
 function transformHeaders(config) {
-	let headers = flattenHeaders(config.headers, config.method)
-	let { auth, authKey, authURL, url } = config
+	const headers = flattenHeaders(config.headers, config.method)
+	const { auth, authKey, authURL, url } = config
 	if (authURL.exclusive && authURL.exclusive.includes(url)) {
 		return headers
 	}
@@ -35,10 +37,10 @@ function transformHeaders(config) {
 	}
 	if (auth &&
 		authKey &&
-		typeof authKey === "string" &&
+		typeof authKey === 'string' &&
 		headers[authKey] === undefined &&
 		headers[authKey.toLowerCase()] === undefined) {
-		let authType = typeof config.auth
+		const authType = typeof config.auth
 		let authStr = ''
 		if (authType === 'string') {
 			authStr = auth
@@ -59,20 +61,21 @@ function transformResponse(res, config) {
 
 function uniRequest(config) {
 	return new Promise((resolve, reject) => {
-		let {
+		const {
 			url,
 			method,
 			data,
+			params,
 			timeout,
 			headers: header,
 			dataType = 'json',
 			responseType = 'text',
 			cancelToken
 		} = config
-		let requestTask = uni.request({
+		const requestTask = wx.request({
 			url,
 			method,
-			data,
+			data: method === 'GET' ? params : data,
 			header,
 			timeout,
 			dataType,
@@ -80,7 +83,7 @@ function uniRequest(config) {
 			success: res => resolve(res),
 			fail: err => reject(err),
 			complete: () => { }
-		});
+		})
 		if (cancelToken) {
 			cancelToken.promise.then(reason => {
 				reject(reason)

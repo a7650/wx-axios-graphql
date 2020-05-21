@@ -1,14 +1,16 @@
 /*
- * @Author: zhang zhipeng 
- * @Date: 2020-04-15 10:29:40 
+ * @Author: zhang zhipeng
+ * @Date: 2020-04-15 10:29:40
  * @Last Modified by: zhang zhipeng
- * @Last Modified time: 2020-05-15 13:35:17
+ * @Last Modified time: 2020-09-10 10:31:33
  */
+
 import Request from './request'
 import { deepMerge } from '../utils'
 import defaults from '../defaults'
+import { requestStart, requestEndError, requestEnd } from './logger'
 
-let cache = {}
+const cache = {}
 
 /**
  * Request的graphQL扩展
@@ -17,7 +19,7 @@ class graphQL {
     constructor(config = {}) {
         this.client = new Request(deepMerge(defaults, config))
         this.config = config
-        if (config.custom !== "undefined") {
+        if (config.custom !== 'undefined') {
             this.isCustomQueryStatement = !!config.custom
         } else {
             this.isCustomQueryStatement = false
@@ -28,7 +30,7 @@ class graphQL {
      * @property {Object} variables 查询参数
      */
     query(data, config = {}) {
-        let type = "query"
+        const type = 'query'
         return this.dispatchRequest(data, config, type, 'query')
     }
     /**
@@ -36,19 +38,20 @@ class graphQL {
      * @property {Object} variables 查询参数
      */
     mutate(data, config = {}) {
-        let type = "mutation"
+        const type = 'mutation'
         data.query = data.mutation
         return this.dispatchRequest(data, config, type, 'mutate')
     }
     dispatchRequest(data, config, type, handleType) {
         let { query, variables = {}, responseNode, custom } = data
-        if (!query) {
-            console.error(`${handleType}缺少${type}属性`)
+        if (!(query = formatQuery(query))) {
             return Promise.reject()
         }
-        let queryStatement = ""
+        let queryStatement = ''
         let isCustomQueryStatement
-        if (typeof custom === "boolean") {
+        let variablesWithScoped = {}
+        let ast = null
+        if (typeof custom === 'boolean') {
             isCustomQueryStatement = custom
         } else {
             isCustomQueryStatement = this.isCustomQueryStatement
@@ -56,44 +59,147 @@ class graphQL {
         if (isCustomQueryStatement) {
             queryStatement = query
         } else {
-            let cacheKey = query + responseNode || ""
+            const cacheKey = query.join('/') + responseNode || ''
             if (cache[cacheKey]) {
                 queryStatement = cache[cacheKey]
             } else {
                 try {
-                    let ast = parse(query, responseNode, type)
-                    queryStatement = cache[cacheKey] = gencode(ast)
+                    ast = parse(query, responseNode, type, variables)
+                    // queryStatement = cache[cacheKey] = gencode(ast)
+                    queryStatement = gencode(ast)
+                    variablesWithScoped = getVariablesWithScoped(ast)
+                    if (this.config.logger) {
+                        requestStart(ast, variablesWithScoped)
+                    }
                 } catch (err) {
-                    cache[cacheKey] = ""
+                    cache[cacheKey] = ''
                     console.error(err)
                     return Promise.reject()
                 }
             }
         }
-        return this.client.post(this.config.url, { query: queryStatement, variables }, config)
+        config = Object.assign({}, config, {
+            isGql: true,
+            gql: ast
+        })
+        return this.client.post(this.config.url, { query: queryStatement, variables: variablesWithScoped }, config).then(
+            res => {
+                if (this.config.logger) {
+                    requestEnd(ast, res)
+                }
+                return Promise.resolve(res)
+            },
+            err => {
+                if (this.config.logger) {
+                    requestEndError(ast, err)
+                }
+                return Promise.reject(err)
+            }
+        )
     }
 }
-function parse(query, responseNode, type) {
+
+function parse(queries, responseNode, type, variables) {
     if (!responseNode) {
-        responseNode = ""
+        responseNode = {}
     }
-    if (typeof query !== "string" || typeof responseNode !== "string") {
-        throw new Error(`query和responseNode属性应为string类型 ${query} ${responseNode}`)
+    const isOnlyQuery = queries.length === 1
+    // const resultMap = {}
+    const resultArr = []
+    queries.forEach(query => {
+        const ast = parseQuery(query, responseNode, type, variables, isOnlyQuery)
+        // resultMap[ast.operationName] = ast
+        resultArr.push(ast)
+    })
+    return resultArr
+}
+
+/**
+ * @param {Object[]} ast query的ast
+ */
+function gencode(ast) {
+    let result = ''
+    const operationType = ast[0].operationType
+    const operationName = ast.map(item => item.operationName).join('_')
+    const variablesScoped = getVariablesScoped(ast)
+    const variablesStatement = variablesScoped.length > 0 ? `(${variablesScoped.join(',')})` : ''
+    result += `${operationType} ${operationName}${variablesStatement}{
+        ${createMainStatement(ast)}
+    }`
+    function getVariablesScoped(ast) {
+        const _v = []
+        ast.forEach(item => {
+            const { operationName, variables } = item
+            _v.push(...variables.map(({ key, type }) => {
+                return `$${operationName}_${key}:${type}`
+            }))
+        })
+        return _v
     }
+    function createMainStatement(ast) {
+        let _s = ''
+        ast.forEach(item => {
+            const { operationName, variables, responseNode } = item
+            const hasVariables = variables && variables.length > 0
+            _s += operationName
+            if (hasVariables) {
+                const _vs = variables.map(({ key }) => `${key}:$${operationName}_${key}`).join(',')
+                _s += `(${_vs})`
+            }
+            if (responseNode) {
+                _s += `{${responseNode}}`
+            }
+            _s += `↵`
+        })
+        return _s
+    }
+    return result
+}
+
+/**
+ *
+ * @param {String|String[]} query
+ */
+function formatQuery(query) {
+    if (!query) {
+        return false
+    }
+    if (typeof query === 'string') {
+        return [query]
+    }
+    if (Array.isArray(query)) {
+        if (query.some(item => typeof item !== 'string')) {
+            console.error(`query为数组时需要是 "string[]" 类型`)
+            return false
+        }
+        return query
+    }
+    console.error('query只支持 string 和 string[] 类型')
+    return false
+}
+
+/**
+ *
+ * @param {String} query query语句
+ * @param {String | Object} responseNode 返回节点声明
+ * @param {String}} type 操作类型
+ * @param {Object} variables 变量
+ */
+function parseQuery(query, responseNode, type, variables, isOnlyQuery) {
     query = query.trim()
-    let contentReg = /\(([^)]*)\)/
-    let result = {}
+    const contentReg = /\(([^)]*)\)/
+    const result = {}
     let match = query.match(contentReg)
     if (!match) {
-        query += "()"
+        query += '()'
         match = query.match(contentReg)
         if (!match) {
             throw new Error(`${query}语法错误`)
         }
     }
-    let variablesStatement = match[1]
-    let operationIdx = match["index"]
-    let operationName = query.substr(0, operationIdx)
+    const variablesStatement = match[1]
+    const operationIdx = match['index']
+    const operationName = query.substr(0, operationIdx)
     if (!operationName) {
         throw new Error(`缺少操作名称: ${query}`)
     }
@@ -101,8 +207,8 @@ function parse(query, responseNode, type) {
     result.variables = []
     result.variablesMap = {}
     if (variablesStatement) {
-        variablesStatement.split(",").forEach(item => {
-            let [key, type] = item.split(":")
+        variablesStatement.split(',').forEach(item => {
+            let [key, type] = item.split(':')
             key = key.trim()
             type = type.trim()
             if (!type) {
@@ -112,34 +218,24 @@ function parse(query, responseNode, type) {
             result.variablesMap[key] = type
         })
     }
-    result.responseNode = responseNode
+    if (typeof responseNode === 'string') {
+        responseNode = { [operationName]: responseNode }
+    }
+    result.variablesStore = isOnlyQuery ? variables : (variables[operationName] || {})
+    result.responseNode = responseNode[operationName] || ''
     result.operationType = type
     return result
 }
 
-function gencode(ast) {
-    let result = ""
-    let { operationName, operationType, variables, responseNode } = ast
-    let hasVariables = variables && variables.length > 0
-    result += `${operationType} ${operationName}`
-    if (hasVariables) {
-        result += "("
-        variables.forEach(({ key, type }, i) => {
-            result += `${i === 0 ? "" : ","}$${key}:${type}`
+function getVariablesWithScoped(ast) {
+    const result = {}
+    if (ast && ast.length > 0) {
+        ast.forEach(item => {
+            const { operationName, variablesStore } = item
+            Object.keys(variablesStore).forEach(key => {
+                result[`${operationName}_${key}`] = variablesStore[key]
+            })
         })
-        result += `){${operationName}(`
-        variables.forEach(({ key, type }, i) => {
-            result += `${i === 0 ? "" : ","}${key}:$${key}`
-        })
-        result += ")"
-        if (responseNode) {
-            result += `{${responseNode}}`
-        }
-        result += "}"
-    } else {
-        if (responseNode) {
-            result += `{${operationName}{${responseNode}}}`
-        }
     }
     return result
 }

@@ -1,8 +1,8 @@
 /*
- * @Author: zhang zhipeng 
- * @Date: 2020-02-01 17:25:35 
+ * @Author: zhang zhipeng
+ * @Date: 2020-02-01 17:25:35
  * @Last Modified by: zhang zhipeng
- * @Last Modified time: 2020-05-17 16:54:09
+ * @Last Modified time: 2020-02-07 14:09:51
  */
 
 const defaults = {
@@ -16,11 +16,11 @@ const defaults = {
 		}
 	},
 
-	baseURL: "",
+	baseURL: '',
 
 	auth: null, // {null | String | Function}
 
-	authKey: "Authorization",
+	authKey: 'Authorization',
 
 	authURL: {
 		inclusive: null,

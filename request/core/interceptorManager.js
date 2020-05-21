@@ -1,8 +1,8 @@
 /*
- * @Author: zhang zhipeng 
- * @Date: 2020-02-01 17:25:11 
- * @Last Modified by: zhang zhipeng
- * @Last Modified time: 2020-05-17 16:53:28
+ * @Author: zhang zhipeng
+ * @Date: 2020-02-01 17:25:11
+ * @Last Modified by:   zhang zhipeng
+ * @Last Modified time: 2020-02-01 17:25:11
  */
 
 export default class InterceptorManager {

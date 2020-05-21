@@ -1,13 +1,13 @@
 /*
- * @Author: zhang zhipeng 
- * @Date: 2020-02-01 17:25:29 
+ * @Author: zhang zhipeng
+ * @Date: 2020-02-01 17:25:29
  * @Last Modified by: zhang zhipeng
- * @Last Modified time: 2020-05-17 16:53:40
+ * @Last Modified time: 2020-09-10 10:32:11
  */
 
-import mergeConfig from './mergeConfig'
-import dispatchRequest from './dispatchRequest'
-import InterceptorManager from './interceptorManager'
+import mergeConfig from '@/common/request/core/mergeConfig.js'
+import dispatchRequest from '@/common/request/core/dispatchRequest.js'
+import InterceptorManager from '@/common/request/core/interceptorManager.js'
 
 export default class Request {
 	constructor(config) {
@@ -24,7 +24,7 @@ export default class Request {
 		} else {
 			config = url
 		}
-		let originConfig = config
+		const originConfig = config
 		config = mergeConfig(this.defaults, config)
 		config.originConfig = originConfig
 		const promiseChain = [{
@@ -35,7 +35,7 @@ export default class Request {
 		this.interceptors.response.forEach(interceptor => promiseChain.push(interceptor))
 		let promise = Promise.resolve(config)
 		while (promiseChain.length) {
-			let {
+			const {
 				resolved,
 				rejected
 			} = promiseChain.shift()

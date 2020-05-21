@@ -1,8 +1,8 @@
 /*
- * @Author: zhang zhipeng 
- * @Date: 2020-02-01 17:24:49 
+ * @Author: zhang zhipeng
+ * @Date: 2020-02-01 17:24:49
  * @Last Modified by: zhang zhipeng
- * @Last Modified time: 2020-05-17 16:52:55
+ * @Last Modified time: 2020-02-08 17:49:13
  */
 
 export default class CancelToken {
