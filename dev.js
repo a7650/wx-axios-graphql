@@ -1,12 +1,28 @@
+
+// `query queryUnion($keyword: String, $form: SearchOrgDepositForm!) { 
+//      contractors(keyword: $keyword) {
+//            totalCount
+//      }
+//      orgDeposits(form: $form) {
+//            totalCount
+//       }
+// }`
+
+// `query queryUnion($keyword: String, $form: SearchOrgDepositForm!) { 
+//      contractors(keyword: $keyword) {
+//            totalCount
+//      }
+// }`
+
+
+
+
 /*
  * @Author: zhang zhipeng 
  * @Date: 2020-04-15 10:29:40 
  * @Last Modified by: zhang zhipeng
- * @Last Modified time: 2020-05-21 21:01:41
+ * @Last Modified time: 2020-05-22 00:12:27
  */
-import Request from './request'
-import { deepMerge } from '../utils'
-import defaults from '../defaults'
 
 let cache = {}
 
@@ -15,7 +31,12 @@ let cache = {}
  */
 class graphQL {
     constructor(config = {}) {
-        this.client = new Request(deepMerge(defaults, config))
+        // this.client = new Request(deepMerge(defaults, config))
+        this.client = {
+            post(...ar) {
+                console.log(ar)
+            }
+        }
         this.config = config
         if (config.custom !== "undefined") {
             this.isCustomQueryStatement = !!config.custom
@@ -47,6 +68,7 @@ class graphQL {
         }
         let queryStatement = ""
         let isCustomQueryStatement
+        let variablesWithScoped = {}
         if (typeof custom === "boolean") {
             isCustomQueryStatement = custom
         } else {
@@ -61,8 +83,8 @@ class graphQL {
             } else {
                 try {
                     let ast = parse(query, responseNode, type, variables)
-                    console.log(ast)
                     queryStatement = cache[cacheKey] = gencode(ast)
+                    variablesWithScoped = getVariablesWithScoped(ast)
                 } catch (err) {
                     cache[cacheKey] = ""
                     console.error(err)
@@ -70,7 +92,7 @@ class graphQL {
                 }
             }
         }
-        return this.client.post(this.config.url, { query: queryStatement, variables }, config)
+        return this.client.post(this.config.url, { query: queryStatement, variables: variablesWithScoped }, config)
     }
 }
 
@@ -93,29 +115,66 @@ function parse(queries, responseNode, type, variables) {
  */
 function gencode(ast) {
     let result = ""
-    let { operationName, operationType, variables, responseNode } = ast
-    let hasVariables = variables && variables.length > 0
-    result += `${operationType} ${operationName}`
-    if (hasVariables) {
-        result += "("
-        variables.forEach(({ key, type }, i) => {
-            result += `${i === 0 ? "" : ","}$${key}:${type}`
+    let operationType = ast[0].operationType
+    let operationName = ast.map(item => item.operationName).join("_")
+    let variablesScoped = getVariablesScoped(ast)
+    let variablesStatement = variablesScoped.length > 0 ? `(${variablesScoped.join(",")})` : ""
+    result += `${operationType} ${operationName}${variablesStatement}{
+        ${createMainStatement(ast)}
+    }`
+    function getVariablesScoped(ast) {
+        let _v = []
+        ast.forEach(item => {
+            let { operationName, variables } = item
+            _v.push(...variables.map(({ key, type }) => {
+                return `$${operationName}_${key}:${type}`
+            }))
         })
-        result += `){${operationName}(`
-        variables.forEach(({ key, type }, i) => {
-            result += `${i === 0 ? "" : ","}${key}:$${key}`
-        })
-        result += ")"
-        if (responseNode) {
-            result += `{${responseNode}}`
-        }
-        result += "}"
-    } else {
-        if (responseNode) {
-            result += `{${operationName}{${responseNode}}}`
-        }
+        return _v
     }
+    function createMainStatement(ast) {
+        let _s = ""
+        ast.forEach(item => {
+            let { operationName, variables, responseNode } = item
+            let hasVariables = variables && variables.length > 0
+            _s += operationName
+            if (hasVariables) {
+                console.log(variables)
+                _vs = variables.map(({ key }) => `${key}:${operationName}_${key}`).join(",")
+                _s += `(${_vs})`
+            }
+            if (responseNode) {
+                _s += `{${responseNode}}`
+            }
+            _s += `↵`
+        })
+        return _s
+    }
+    console.log(result)
     return result
+    // let { operationName, operationType, variables, responseNode } = ast
+    // let hasVariables = variables && variables.length > 0
+    // result += `${operationType} ${operationName}`
+    // if (hasVariables) {
+    //     result += "("
+    //     variables.forEach(({ key, type }, i) => {
+    //         result += `${i === 0 ? "" : ","}$${key}:${type}`
+    //     })
+    //     result += `){${operationName}(`
+    //     variables.forEach(({ key, type }, i) => {
+    //         result += `${i === 0 ? "" : ","}${key}:$${key}`
+    //     })
+    //     result += ")"
+    //     if (responseNode) {
+    //         result += `{${responseNode}}`
+    //     }
+    //     result += "}"
+    // } else {
+    //     if (responseNode) {
+    //         result += `{${operationName}{${responseNode}}}`
+    //     }
+    // }
+    // return result
 }
 
 /**
@@ -181,14 +240,52 @@ function parseQuery(query, responseNode, type, variables) {
             result.variablesMap[key] = type
         })
     }
-    if (typeof variables === 'string') {
-        variables = { [operationName]: variables }
+    if (typeof responseNode === 'string') {
+        responseNode = { [operationName]: responseNode }
     }
-    result.variablesStore = variables[operationName]
-    result.responseNode = responseNode
+    result.variablesStore = variables[operationName] || {}
+    result.responseNode = responseNode[operationName] || ""
     result.operationType = type
     return result
 }
 
-export default graphQL
+function getVariablesWithScoped(ast) {
+    let result = {}
+    if (ast && ast.length > 0) {
+        ast.forEach(item => {
+            let { operationName, variablesStore } = item
+            Object.keys(variablesStore).forEach(key => {
+                result[`${operationName}_${key}`] = variablesStore[key]
+            })
+        })
+    }
+    return result
+}
 
+
+
+
+
+
+
+
+
+
+
+
+const gql = new graphQL()
+
+gql.query({
+    query: "a(value1:String!,value2:Int)",
+    responseNode: "a b c",
+    variables: {
+        a: {
+            value1: "qweewq",
+            value2: 1
+        },
+        // b: {
+        //     value3: "adasdasd",
+        //     value4: 2
+        // }
+    }
+})
