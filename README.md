@@ -239,7 +239,7 @@ function demoQuery1() {
 
 /**
  * mutate操作
- * mutate操作的使用方式可query相同
+ * mutate操作的使用方式和query相同
  */
 function demoMutate() {
     gql.mutate({
@@ -253,6 +253,42 @@ function demoMutate() {
         }
     }).then(res => {
         resolve(res.data.sessionByWechat)
+    }, err => {
+        reject(err)
+    })
+}
+```
+
+### 新增 同时进行多个查询
+```
+function demoQuery1() {
+    gql.query({
+        custom: false, //可选
+        //同时查询多个时，query需要传入数组
+        query: [`session(appId: ID!, code: String!)`,`userInfo(id: $id)`]， // 会同时查询session和userInfo
+        // 此时responseNode需要为一个对象，分别定义不同查询的返回节点
+        responseNode:{
+            session: `token`,
+            userInfo: `name`
+        },
+        // variables也要为对象，分别传入不同查询的参数
+        variables: { 
+            session: {
+                appId: "test123",
+                code: "test456"
+            },
+            userInfo:{
+                id: "userid"
+            }
+        }
+    }).then(res => {
+        if (res.errors) {
+            //也可以在相应拦截器里面设置
+            console.log('error')
+            reject(errors)
+        } else {
+            resolve(res.data)
+        }
     }, err => {
         reject(err)
     })

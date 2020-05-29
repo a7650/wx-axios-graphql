@@ -2,11 +2,13 @@
  * @Author: zhang zhipeng 
  * @Date: 2020-04-15 10:29:40 
  * @Last Modified by: zhang zhipeng
- * @Last Modified time: 2020-05-21 21:01:41
+ * @Last Modified time: 2020-05-29 11:27:41
  */
+
 import Request from './request'
 import { deepMerge } from '../utils'
 import defaults from '../defaults'
+import { requestStart, requestEndError, requestEnd } from './logger'
 
 let cache = {}
 
@@ -47,6 +49,8 @@ class graphQL {
         }
         let queryStatement = ""
         let isCustomQueryStatement
+        let variablesWithScoped = {}
+        let ast = null
         if (typeof custom === "boolean") {
             isCustomQueryStatement = custom
         } else {
@@ -60,9 +64,13 @@ class graphQL {
                 queryStatement = cache[cacheKey]
             } else {
                 try {
-                    let ast = parse(query, responseNode, type, variables)
-                    console.log(ast)
-                    queryStatement = cache[cacheKey] = gencode(ast)
+                    ast = parse(query, responseNode, type, variables)
+                    // queryStatement = cache[cacheKey] = gencode(ast)
+                    queryStatement = gencode(ast)
+                    variablesWithScoped = getVariablesWithScoped(ast)
+                    if (this.config.logger) {
+                        requestStart(ast, variablesWithScoped)
+                    }
                 } catch (err) {
                     cache[cacheKey] = ""
                     console.error(err)
@@ -70,7 +78,20 @@ class graphQL {
                 }
             }
         }
-        return this.client.post(this.config.url, { query: queryStatement, variables }, config)
+        return this.client.post(this.config.url, { query: queryStatement, variables: variablesWithScoped }, config).then(
+            res => {
+                if (this.config.logger) {
+                    requestEnd(ast, res)
+                }
+                return Promise.resolve(res)
+            },
+            err => {
+                if (this.config.logger) {
+                    requestEndError(ast, res)
+                }
+                return Promise.reject(err)
+            }
+        )
     }
 }
 
@@ -78,10 +99,11 @@ function parse(queries, responseNode, type, variables) {
     if (!responseNode) {
         responseNode = {}
     }
+    const isOnlyQuery = queries.length === 1
     // const resultMap = {}
     const resultArr = []
     queries.forEach(query => {
-        let ast = parseQuery(query, responseNode, type, variables)
+        let ast = parseQuery(query, responseNode, type, variables, isOnlyQuery)
         // resultMap[ast.operationName] = ast
         resultArr.push(ast)
     })
@@ -93,27 +115,39 @@ function parse(queries, responseNode, type, variables) {
  */
 function gencode(ast) {
     let result = ""
-    let { operationName, operationType, variables, responseNode } = ast
-    let hasVariables = variables && variables.length > 0
-    result += `${operationType} ${operationName}`
-    if (hasVariables) {
-        result += "("
-        variables.forEach(({ key, type }, i) => {
-            result += `${i === 0 ? "" : ","}$${key}:${type}`
+    let operationType = ast[0].operationType
+    let operationName = ast.map(item => item.operationName).join("_")
+    let variablesScoped = getVariablesScoped(ast)
+    let variablesStatement = variablesScoped.length > 0 ? `(${variablesScoped.join(",")})` : ""
+    result += `${operationType} ${operationName}${variablesStatement}{
+        ${createMainStatement(ast)}
+    }`
+    function getVariablesScoped(ast) {
+        let _v = []
+        ast.forEach(item => {
+            let { operationName, variables } = item
+            _v.push(...variables.map(({ key, type }) => {
+                return `$${operationName}_${key}:${type}`
+            }))
         })
-        result += `){${operationName}(`
-        variables.forEach(({ key, type }, i) => {
-            result += `${i === 0 ? "" : ","}${key}:$${key}`
+        return _v
+    }
+    function createMainStatement(ast) {
+        let _s = ""
+        ast.forEach(item => {
+            let { operationName, variables, responseNode } = item
+            let hasVariables = variables && variables.length > 0
+            _s += operationName
+            if (hasVariables) {
+                let _vs = variables.map(({ key }) => `${key}:$${operationName}_${key}`).join(",")
+                _s += `(${_vs})`
+            }
+            if (responseNode) {
+                _s += `{${responseNode}}`
+            }
+            _s += `↵`
         })
-        result += ")"
-        if (responseNode) {
-            result += `{${responseNode}}`
-        }
-        result += "}"
-    } else {
-        if (responseNode) {
-            result += `{${operationName}{${responseNode}}}`
-        }
+        return _s
     }
     return result
 }
@@ -148,7 +182,7 @@ function formatQuery(query) {
  * @param {String}} type 操作类型
  * @param {Object} variables 变量
  */
-function parseQuery(query, responseNode, type, variables) {
+function parseQuery(query, responseNode, type, variables, isOnlyQuery) {
     query = query.trim()
     let contentReg = /\(([^)]*)\)/
     let result = {}
@@ -181,14 +215,26 @@ function parseQuery(query, responseNode, type, variables) {
             result.variablesMap[key] = type
         })
     }
-    if (typeof variables === 'string') {
-        variables = { [operationName]: variables }
+    if (typeof responseNode === 'string') {
+        responseNode = { [operationName]: responseNode }
     }
-    result.variablesStore = variables[operationName]
-    result.responseNode = responseNode
+    result.variablesStore = isOnlyQuery ? variables : (variables[operationName] || {})
+    result.responseNode = responseNode[operationName] || ""
     result.operationType = type
     return result
 }
 
-export default graphQL
+function getVariablesWithScoped(ast) {
+    let result = {}
+    if (ast && ast.length > 0) {
+        ast.forEach(item => {
+            let { operationName, variablesStore } = item
+            Object.keys(variablesStore).forEach(key => {
+                result[`${operationName}_${key}`] = variablesStore[key]
+            })
+        })
+    }
+    return result
+}
 
+export default graphQL
