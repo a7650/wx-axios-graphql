@@ -2,7 +2,7 @@
  * @Author: zhang zhipeng
  * @Date: 2020-02-01 17:25:00
  * @Last Modified by: zhang zhipeng
- * @Last Modified time: 2020-08-18 17:28:48
+ * @Last Modified time: 2020-09-03 10:22:26
  */
 
 import {
@@ -72,7 +72,7 @@ function uniRequest(config) {
 			responseType = 'text',
 			cancelToken
 		} = config
-		const requestTask = uni.request({
+		const requestTask = wx.request({
 			url,
 			method,
 			data: method === 'GET' ? params : data,
