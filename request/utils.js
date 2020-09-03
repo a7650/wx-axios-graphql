@@ -1,8 +1,8 @@
 /*
- * @Author: zhang zhipeng 
- * @Date: 2020-02-01 17:26:36 
+ * @Author: zhang zhipeng
+ * @Date: 2020-02-01 17:26:36
  * @Last Modified by: zhang zhipeng
- * @Last Modified time: 2020-04-15 10:43:01
+ * @Last Modified time: 2020-05-28 20:15:01
  */
 
 const _toString = Object.prototype.toString
@@ -25,8 +25,8 @@ export function isPlainObject(val) {
 }
 
 export function extend(_to, _from) {
-	let requestAPI = ['request','get','delete','head','options','post','put','patch','_requestMethodWithData','_requestMethodWithoutData']
-	for (let key in _from) {
+	const requestAPI = ['request', 'get', 'delete', 'head', 'options', 'post', 'put', 'patch', '_requestMethodWithData', '_requestMethodWithoutData']
+	for (const key in _from) {
 		_to[key] = _from[key]
 	}
 	requestAPI.forEach(key => {
@@ -36,11 +36,11 @@ export function extend(_to, _from) {
 }
 
 export function deepMerge(...obj) {
-	let result = {}
+	const result = {}
 	obj.forEach(item => {
 		if (!item) return
 		Object.keys(item).forEach(key => {
-			let val = item[key]
+			const val = item[key]
 			if (isPlainObject(val)) {
 				if (isPlainObject(result[key])) {
 					result[key] = deepMerge(result[key], val)
@@ -66,3 +66,4 @@ export function flattenHeaders(headers, method) {
 	})
 	return headers
 }
+

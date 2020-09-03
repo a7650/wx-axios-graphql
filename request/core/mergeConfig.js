@@ -1,10 +1,9 @@
 /*
- * @Author: zhang zhipeng 
- * @Date: 2020-02-01 17:25:22 
- * @Last Modified by:   zhang zhipeng 
- * @Last Modified time: 2020-02-01 17:25:22 
+ * @Author: zhang zhipeng
+ * @Date: 2020-02-01 17:25:22
+ * @Last Modified by:   zhang zhipeng
+ * @Last Modified time: 2020-02-01 17:25:22
  */
-
 
 import {
 	isPlainObject,
@@ -43,18 +42,18 @@ function deepMergeStrat(val1, val2) {
 
 export default function mergeConfig(config1, config2 = {}) {
 	const config = {}
-	for (let key in config2) {
+	for (const key in config2) {
 		mergeField(key)
 	}
 
-	for (let key in config1) {
+	for (const key in config1) {
 		if (!config2[key]) {
 			mergeField(key)
 		}
 	}
 
 	function mergeField(key) {
-		let strat = strats[key] || defaultStrat
+		const strat = strats[key] || defaultStrat
 		config[key] = strat(config1[key], config2[key])
 	}
 	return config
