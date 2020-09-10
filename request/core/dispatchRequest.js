@@ -7,7 +7,7 @@
 
 import {
 	flattenHeaders
-} from '@/common/request/utils.js'
+} from '../utils'
 
 export default function dispatchRequest(config) {
 	procressConfig(config)

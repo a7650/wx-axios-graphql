@@ -2,12 +2,12 @@
  * @Author: zhang zhipeng
  * @Date: 2020-02-01 17:25:29
  * @Last Modified by: zhang zhipeng
- * @Last Modified time: 2020-07-31 14:47:37
+ * @Last Modified time: 2020-09-10 10:32:11
  */
 
-import mergeConfig from '@/common/request/core/mergeConfig.js'
-import dispatchRequest from '@/common/request/core/dispatchRequest.js'
-import InterceptorManager from '@/common/request/core/interceptorManager.js'
+import mergeConfig from './mergeConfig'
+import dispatchRequest from './dispatchRequest'
+import InterceptorManager from './interceptorManager'
 
 export default class Request {
 	constructor(config) {
