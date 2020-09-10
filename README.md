@@ -1,7 +1,7 @@
 # 🛸wx-axios-graphql
 ### 可以在微信小程序上使用的axios，同时支持graphQL
 
-[npm v1.1.1][npm-url] &emsp; [git地址][git-url]
+[npm v1.1.2][npm-url] &emsp; [git地址][git-url]
 
 
 [npm-url]: https://www.npmjs.com/package/wx-axios-graphql
